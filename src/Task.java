@@ -39,10 +39,13 @@ public record Task(
             effort = BigDecimal.ZERO;
         }
 
+        @Deprecated
         int newId = generateUniqueId();
-        return new Task(newId,title, description, createdAt, dueDate, isCompleted, category, notes, effort);
+
+        return new Task(-1,title, description, createdAt, dueDate, isCompleted, category, notes, effort);
     }
 
+    @Deprecated
     private static synchronized int generateUniqueId(){
         return ++idCounter;
     }
