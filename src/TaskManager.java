@@ -117,7 +117,27 @@ public class TaskManager {
         }
     }
 
-    private void updateTaskInDatabase(Task task){
+    // New method to revert tasks to incomplete
+    public void revertTasks() {
+        synchronized (this) { // Thread-safe
+            List<Task> updatedTasks = new ArrayList<>();
+            for (Task task : tasks) {
+                if (task.isCompleted()) {
+                    Task revertedTask = new Task(task.id(), task.title(), task.description(), task.createdAt(),
+                            task.dueDate(), false, task.category(), task.notes(), task.effort());
+                    updatedTasks.add(revertedTask);
+                    updateTaskInDatabase(revertedTask);
+                    System.out.println("Reverted " + task.title() + " to incomplete");
+                } else {
+                    updatedTasks.add(task); // Keep unchanged
+                }
+            }
+            tasks.clear();
+            tasks.addAll(updatedTasks); // Replace list atomically
+        }
+    }
+
+    protected void updateTaskInDatabase(Task task){
         try(Connection conn = DriverManager.getConnection(DB_URL);
             PreparedStatement pstmt = conn.prepareStatement("update tasks set is_completed = ? where id = ?")
         ){

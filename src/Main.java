@@ -17,7 +17,7 @@ public class Main {
         manager.sortByDueDate();
         manager.displayTasks();
 
-        System.out.println("Sorter by Effort:");
+        System.out.println("Sorted by Effort:");
         manager.sortByEffort();
         manager.displayTasks();
 
@@ -25,7 +25,7 @@ public class Main {
         List<Task> dueSoon = manager.getTasksDueBefore(LocalDateTime.of(2025, 3, 24, 0,0));
         dueSoon.forEach(System.out::println);
 
-        manager.processTasks();
+        manager.revertTasks();
 
         Thread.sleep(6500);
 
