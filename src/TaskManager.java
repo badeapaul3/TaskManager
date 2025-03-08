@@ -1,4 +1,4 @@
-import javax.swing.plaf.nimbus.State;
+
 import java.sql.*;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -54,11 +54,11 @@ public class TaskManager {
     }
 
 
-    public void addTask(Task task){
+    public synchronized void addTask(Task task){
         int newId = saveTaskToDatabase(task);
         Task taskWithId = new Task(newId, task.title(), task.description(), task.createdAt(),
                 task.dueDate(), task.isCompleted(), task.category(), task.notes(), task.effort());
-        tasks.add(task);
+        tasks.add(taskWithId);
     }
 
     private int saveTaskToDatabase(Task task){
@@ -92,6 +92,44 @@ public class TaskManager {
         }
     }
 
+    public void processTasks(){
+        for(Task task : new ArrayList<>(tasks)) { //Copy to avoid concurrentModificationException
+            Thread thread = new Thread(
+                    () -> {
+                        synchronized (this){
+                            if(!task.isCompleted()){
+                                System.out.println("Processing " + task.title() + " (Effort: "+ task.effort() + "h) on " + Thread.currentThread().getName());
+                                try{
+                                    Thread.sleep(task.effort().multiply(BigDecimal.valueOf(1000)).longValue());
+                                    Task completedTask = task.markCompleted();
+                                    tasks.set(tasks.indexOf(task), completedTask);
+                                    updateTaskInDatabase(completedTask);
+                                    System.out.println("Completed " + task.title());
+                                }catch (InterruptedException e){
+                                    Thread.currentThread().interrupt();
+                                    System.err.println("Thread interrupted: " + e.getMessage());
+                                }
+                            }
+                        }
+                    }
+            );
+            thread.start();
+        }
+    }
+
+    private void updateTaskInDatabase(Task task){
+        try(Connection conn = DriverManager.getConnection(DB_URL);
+            PreparedStatement pstmt = conn.prepareStatement("update tasks set is_completed = ? where id = ?")
+        ){
+            pstmt.setInt(1, task.isCompleted() ? 1 : 0);
+            pstmt.setInt(2, task.id());
+            pstmt.executeUpdate();
+
+        }catch (SQLException e){
+            System.err.println("Database update error: " + e.getMessage());
+        }
+    }
+
     public List<Task> getTasksDueBefore(LocalDateTime deadline){
         List<Task> result = new ArrayList<>();
         for(Task task : tasks){
@@ -109,6 +147,10 @@ public class TaskManager {
 
     public void sortByEffort(){
         tasks.sort(Comparator.comparing(Task::effort, Comparator.nullsLast(Comparator.naturalOrder())));
+    }
+
+    public List<Task> getAllTasks(){
+        return tasks;
     }
 
     public void displayTasks(){

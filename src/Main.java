@@ -6,7 +6,7 @@ import java.util.List;
  * @author hatzp
  **/
 public class Main {
-    public static void main(String[] args) {
+    public static void main(String[] args) throws InterruptedException {
 
         TaskManager manager = new TaskManager();
 
@@ -24,6 +24,13 @@ public class Main {
         System.out.println("Tasks due before March 24th");
         List<Task> dueSoon = manager.getTasksDueBefore(LocalDateTime.of(2025, 3, 24, 0,0));
         dueSoon.forEach(System.out::println);
+
+        manager.processTasks();
+
+        Thread.sleep(6500);
+
+        System.out.println("After processing");
+        manager.displayTasks();
 
     }
 }

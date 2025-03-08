@@ -16,7 +16,6 @@ public record Task(
        String notes,
        BigDecimal effort // in hours
 ) implements Comparable<Task>{
-    private static int idCounter = 0;
 
     //factory method manages unique IDs and also prepares for thread safety
     public static synchronized Task createTask(
@@ -39,15 +38,8 @@ public record Task(
             effort = BigDecimal.ZERO;
         }
 
-        @Deprecated
-        int newId = generateUniqueId();
 
         return new Task(-1,title, description, createdAt, dueDate, isCompleted, category, notes, effort);
-    }
-
-    @Deprecated
-    private static synchronized int generateUniqueId(){
-        return ++idCounter;
     }
 
 
