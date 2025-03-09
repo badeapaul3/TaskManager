@@ -1,9 +1,11 @@
 
+import javax.swing.*;
 import java.sql.*;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.math.BigDecimal;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * @author hatzp
@@ -15,11 +17,17 @@ public class TaskManager {
     private static final String DB_URL = "jdbc:sqlite:taskmanager.sqlite";
     private static final DateTimeFormatter DB_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
+    private Runnable updateCallback; // Callback to refresh UI
+
     public TaskManager(){
         this.tasks = new ArrayList<>();
         loadTasksFromDatabase();
     }
 
+
+    public void setUpdateCallback(Runnable callback){
+        this.updateCallback = callback;
+    }
     private void loadTasksFromDatabase(){
         try(Connection conn = DriverManager.getConnection(DB_URL);
             Statement stmt = conn.createStatement();
@@ -93,25 +101,37 @@ public class TaskManager {
     }
 
     public void processTasks(){
+        List<Task> tasksToProcess = new ArrayList<>(tasks);
+        if(tasksToProcess.isEmpty()) return;
+
+        AtomicInteger activeThreads = new AtomicInteger(tasksToProcess.size());
+
         for(Task task : new ArrayList<>(tasks)) { //Copy to avoid concurrentModificationException
             Thread thread = new Thread(
-                    () -> {
-                        synchronized (this){
-                            if(!task.isCompleted()){
-                                System.out.println("Processing " + task.title() + " (Effort: "+ task.effort() + "h) on " + Thread.currentThread().getName());
-                                try{
-                                    Thread.sleep(task.effort().multiply(BigDecimal.valueOf(1000)).longValue());
-                                    Task completedTask = task.markCompleted();
-                                    tasks.set(tasks.indexOf(task), completedTask);
-                                    updateTaskInDatabase(completedTask);
-                                    System.out.println("Completed " + task.title());
-                                }catch (InterruptedException e){
-                                    Thread.currentThread().interrupt();
-                                    System.err.println("Thread interrupted: " + e.getMessage());
+                () -> {
+                    synchronized (this){
+                        if(!task.isCompleted()){
+                            System.out.println("Processing " + task.title() + " (Effort: "+ task.effort() + "h) on " + Thread.currentThread().getName());
+                            try{
+                                Thread.sleep(task.effort().multiply(BigDecimal.valueOf(1000)).longValue());
+                                Task completedTask = task.markCompleted();
+                                tasks.set(tasks.indexOf(task), completedTask);
+                                updateTaskInDatabase(completedTask);
+                                System.out.println("Completed " + task.title());
+                                //update UI after each task
+                                if(updateCallback != null){
+                                    SwingUtilities.invokeLater(updateCallback);
                                 }
+                            }catch (InterruptedException e){
+                                Thread.currentThread().interrupt();
+                                System.err.println("Thread interrupted: " + e.getMessage());
                             }
                         }
                     }
+                    if(activeThreads.decrementAndGet() == 0 && updateCallback != null){
+                        SwingUtilities.invokeLater(updateCallback); // Final update
+                    }
+                }
             );
             thread.start();
         }
@@ -148,6 +168,16 @@ public class TaskManager {
         }catch (SQLException e){
             System.err.println("Database update error: " + e.getMessage());
         }
+    }
+
+    public List<Task> getTasksByCategory(String category) {
+        List<Task> result = new ArrayList<>();
+        for (Task task : tasks) {
+            if (category == null || task.category() != null && task.category().equalsIgnoreCase(category)) {
+                result.add(task);
+            }
+        }
+        return result;
     }
 
     public List<Task> getTasksDueBefore(LocalDateTime deadline){
