@@ -14,8 +14,17 @@ public record Task(
        boolean isCompleted,
        String category,
        String notes,
-       BigDecimal effort // in hours
+       BigDecimal effort, // in hours
+       Priority priority
 ) implements Comparable<Task>{
+
+    public enum Priority{
+        HIGH, MEDIUM, LOW;
+        @Override
+        public String toString(){
+            return name().substring(0,1) + name().substring(1).toLowerCase();
+        }
+    }
 
     //factory method manages unique IDs and also prepares for thread safety
     public static synchronized Task createTask(
@@ -26,7 +35,8 @@ public record Task(
             boolean isCompleted,
             String category,
             String notes,
-            BigDecimal effort
+            BigDecimal effort,
+            Priority priority
     ){
         if(title == null || title.isBlank()){
             throw new IllegalArgumentException("Title is null or blank");
@@ -37,9 +47,12 @@ public record Task(
         if(effort == null || effort.compareTo(BigDecimal.ZERO)<0){
             effort = BigDecimal.ZERO;
         }
+        if(priority == null){
+            priority = Priority.MEDIUM;
+        }
 
 
-        return new Task(-1,title, description, createdAt, dueDate, isCompleted, category, notes, effort);
+        return new Task(-1,title, description, createdAt, dueDate, isCompleted, category, notes, effort, priority);
     }
 
 
@@ -49,11 +62,11 @@ public record Task(
 
     //Mark as completed
     public Task markCompleted(){
-        return new Task(id, title, description, createdAt, dueDate, true, category, notes, effort);
+        return new Task(id, title, description, createdAt, dueDate, true, category, notes, effort, priority);
     }
 
     public String getFormattedDueDate(){
-        return dueDate != null ? dueDate.format(DateTimeFormatter.ISO_DATE_TIME) : "No due date";
+        return dueDate != null ? dueDate.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")) : "No due date";
     }
 
     //Natural ordring by due date (Task is Comparable)
@@ -73,6 +86,7 @@ public record Task(
                 ", due=" + getFormattedDueDate() +
                 ", category='" + category + '\'' +
                 ", effort=" + effort.stripTrailingZeros().toPlainString() + "h" +
+                ", priority=" + priority +
                 '}';
     }
 }

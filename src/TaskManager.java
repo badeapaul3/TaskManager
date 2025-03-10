@@ -44,6 +44,9 @@ public class TaskManager {
                 BigDecimal effort = rs.getString("effort") != null ?
                         new BigDecimal(rs.getString("effort")) : null;
 
+                String priorityStr = rs.getString("priority");
+                Task.Priority priority = priorityStr != null ? Task.Priority.valueOf(priorityStr) : Task.Priority.MEDIUM;
+
                 tasks.add(new Task(
                         rs.getInt("id"),
                         rs.getString("title"),
@@ -53,7 +56,8 @@ public class TaskManager {
                         rs.getInt("is_completed") == 1,
                         rs.getString("category"),
                         rs.getString("notes"),
-                        effort
+                        effort,
+                        priority
                 ));
             }
         }catch (SQLException e){
@@ -65,15 +69,15 @@ public class TaskManager {
     public synchronized void addTask(Task task){
         int newId = saveTaskToDatabase(task);
         Task taskWithId = new Task(newId, task.title(), task.description(), task.createdAt(),
-                task.dueDate(), task.isCompleted(), task.category(), task.notes(), task.effort());
+                task.dueDate(), task.isCompleted(), task.category(), task.notes(), task.effort(), task.priority());
         tasks.add(taskWithId);
     }
 
     private int saveTaskToDatabase(Task task){
         try (Connection conn = DriverManager.getConnection(DB_URL);
              PreparedStatement pstmt = conn.prepareStatement(
-                     "insert into tasks (title, description, created_at, due_date, is_completed, category, notes, effort) "
-                     + "values (?,?,?,?,?,?,?,?)", Statement.RETURN_GENERATED_KEYS
+                     "insert into tasks (title, description, created_at, due_date, is_completed, category, notes, effort, priority) "
+                     + "values (?,?,?,?,?,?,?,?,?)", Statement.RETURN_GENERATED_KEYS
              )){
             pstmt.setString(1,task.title());
             pstmt.setString(2, task.description());
@@ -83,6 +87,7 @@ public class TaskManager {
             pstmt.setString(6, task.category());
             pstmt.setString(7, task.notes());
             pstmt.setString(8, task.effort() !=null ? task.effort().toString() : null);
+            pstmt.setString(9, task.priority().name());
 
             pstmt.executeUpdate();
             try (ResultSet rs = pstmt.getGeneratedKeys()){
@@ -144,7 +149,7 @@ public class TaskManager {
             for (Task task : tasks) {
                 if (task.isCompleted()) {
                     Task revertedTask = new Task(task.id(), task.title(), task.description(), task.createdAt(),
-                            task.dueDate(), false, task.category(), task.notes(), task.effort());
+                            task.dueDate(), false, task.category(), task.notes(), task.effort(), task.priority());
                     updatedTasks.add(revertedTask);
                     updateTaskInDatabase(revertedTask);
                     System.out.println("Reverted " + task.title() + " to incomplete");
@@ -197,6 +202,10 @@ public class TaskManager {
 
     public void sortByEffort(){
         tasks.sort(Comparator.comparing(Task::effort, Comparator.nullsLast(Comparator.naturalOrder())));
+    }
+
+    public void sortByPriority(){
+        tasks.sort(Comparator.comparing(Task::priority,Comparator.reverseOrder()));
     }
 
     public List<Task> getAllTasks(){

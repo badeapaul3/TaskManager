@@ -58,9 +58,11 @@ public class Main {
         JTextField titleField = new JTextField(20);
         JTextField dueField = new JTextField(15); // Format: yyyy-MM-dd HH:mm
         JTextField effortField = new JTextField(5);
+        JComboBox<Task.Priority> priorityCombo = new JComboBox<>(Task.Priority.values());
         JButton addButton = new JButton("Add Task");
         JButton sortDueButton = new JButton("Sort by Due Date");
         JButton sortEffortButton = new JButton("Sort by Effort");
+        JButton sortPrioritybutton = new JButton("Sort by Priority");
         processButton = new JButton("Process Tasks"); //now it is field
         JButton revertButton = new JButton("Revert Tasks Completion");
 
@@ -82,8 +84,9 @@ public class Main {
                     LocalDateTime dueDate = dueField.getText().isBlank() ? null : LocalDateTime.parse(dueField.getText(),
                             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
                     BigDecimal effort = effortField.getText().isBlank() ? BigDecimal.ZERO : new BigDecimal(effortField.getText());
+                    Task.Priority priority = (Task.Priority) priorityCombo.getSelectedItem();
 
-                    Task newTask = Task.createTask(title, "", LocalDateTime.now(), dueDate, false, "General", "", effort);
+                    Task newTask = Task.createTask(title, "", LocalDateTime.now(), dueDate, false, "General", "", effort, priority);
                     manager.addTask(newTask);
                     updateTaskDisplay();
                     clearFields(titleField, dueField, effortField);
@@ -107,6 +110,11 @@ public class Main {
             updateTaskDisplay();
         });
 
+        sortPrioritybutton.addActionListener( e->{
+            manager.sortByPriority();
+            updateTaskDisplay();
+        });
+
         processButton.addActionListener(e -> {
             processButton.setEnabled(false);
             new Thread(
@@ -124,9 +132,12 @@ public class Main {
         inputPanel.add(dueField);
         inputPanel.add(new JLabel("Effort (h):"));
         inputPanel.add(effortField);
+        inputPanel.add(new JLabel("Priority:"));
+        inputPanel.add(priorityCombo);
         inputPanel.add(addButton);
         inputPanel.add(sortDueButton);
         inputPanel.add(sortEffortButton);
+        inputPanel.add(sortPrioritybutton);
         inputPanel.add(processButton);
         inputPanel.add(revertButton);
 
