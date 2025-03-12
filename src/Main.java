@@ -4,7 +4,6 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
-import java.util.List;
 
 /**
  * @author hatzp
@@ -65,6 +64,8 @@ public class Main {
         JButton sortPrioritybutton = new JButton("Sort by Priority");
         processButton = new JButton("Process Tasks"); //now it is field
         JButton revertButton = new JButton("Revert Tasks Completion");
+        JButton exportButton = new JButton("Export to CSV");// new File export import features
+        JButton importButton = new JButton("Import from CSV");
 
 
         manager.setUpdateCallback(
@@ -126,6 +127,27 @@ public class Main {
             updateTaskDisplay();
         });
 
+        exportButton.addActionListener(e -> {
+            try{
+                manager.exportTasksToCsv("tasks.csv"); //Export to project root
+                JOptionPane.showMessageDialog(frame, "Tasks exported to tasks.csv");
+            }catch (Exception ex){
+                JOptionPane.showMessageDialog(frame, "Export failed: " + ex.getMessage());
+            }
+        });
+
+        importButton.addActionListener(e -> {
+            try {
+                manager.importTasksFromCsv("tasks.csv");    //Import from project root
+                JOptionPane.showMessageDialog(frame, "Tasks imported from tasks.csv");
+            }catch (Exception ex){
+                JOptionPane.showMessageDialog(frame, "Import failed: " + ex.getMessage());
+            }
+        });
+
+
+
+
         inputPanel.add(new JLabel("Title:"));
         inputPanel.add(titleField);
         inputPanel.add(new JLabel("Due (yyyy-MM-dd HH:mm):"));
@@ -140,6 +162,8 @@ public class Main {
         inputPanel.add(sortPrioritybutton);
         inputPanel.add(processButton);
         inputPanel.add(revertButton);
+        inputPanel.add(exportButton);
+        inputPanel.add(importButton);
 
         frame.setLayout(new BorderLayout());
         frame.add(scrollPane, BorderLayout.CENTER);

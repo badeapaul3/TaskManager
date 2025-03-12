@@ -1,0 +1,12 @@
+id,title,description,created_at,due_date,is_completed,category,notes,effort,priority
+1, "Learn Java","Study Java SE 21","2025-03-08T11:42:34.2436758","2025-03-25T15:00:00",1,"Education","Records Lesson",5.5,MEDIUM
+2, "Write Code","Add features","2025-03-08T11:42:34.2476769","2025-03-23T13:00:00",1,"Work","Focus on indexing",3.75,MEDIUM
+3, "Debug","Fix bugs","2025-03-08T11:42:34.928814",,1,"Work","",2.0,MEDIUM
+4, "t1","Study Java SE 21","2025-03-08T13:53:49.3336542","2025-03-07T12:00:00",1,"Education","Records",5.5,MEDIUM
+5, "t2","Implement features","2025-03-08T13:53:49.348169","2025-03-06T09:00:00",1,"Work","Focus",3.75,MEDIUM
+6, "t3","Fix bugs","2025-03-08T13:53:49.3531683",,1,"Work","",2.0,MEDIUM
+7, "MyTask","","2025-03-09T10:32:24.2295833","2025-03-26T12:00:00",1,"General","",2.5,MEDIUM
+8, "NewTask","","2025-03-09T10:44:53.1024121","2025-03-27T13:00:00",1,"General","",3,MEDIUM
+9, "My new Task","","2025-03-10T12:34:49.9723434","2025-04-01T13:00:00",0,"General","",3,HIGH
+10, "another new task","","2025-03-10T12:36:47.7070171","2025-04-02T14:00:00",0,"General","",6,LOW
+11, "added from file TASK","","2025-03-10T12:36:47.7070171","2025-04-02T14:00:00",0,"General","",5,LOW
