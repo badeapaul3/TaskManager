@@ -4,6 +4,8 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * @author hatzp
@@ -52,21 +54,56 @@ public class Main {
 
         //Input panel
         JPanel inputPanel = new JPanel();
-        inputPanel.setLayout(new FlowLayout(FlowLayout.LEFT, 10, 10));
+        inputPanel.setLayout(new GridLayout(2, 1, 10,10));
+
+        JPanel addTaskPanel = new JPanel();
+        addTaskPanel.setLayout(new FlowLayout(FlowLayout.LEFT, 10, 10));
 
         JTextField titleField = new JTextField(20);
         JTextField dueField = new JTextField(15); // Format: yyyy-MM-dd HH:mm
         JTextField effortField = new JTextField(5);
         JComboBox<Task.Priority> priorityCombo = new JComboBox<>(Task.Priority.values());
+        JList<Task> dependencyList = new JList<>(new DefaultListModel<>());
+        dependencyList.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
+        updateDependencyList(dependencyList);
+        JScrollPane dependencyScroll = new JScrollPane(dependencyList);
+        dependencyScroll.setPreferredSize(new Dimension(200,100));
         JButton addButton = new JButton("Add Task");
+
+        addTaskPanel.add(new JLabel("Title:"));
+        addTaskPanel.add(titleField);
+        addTaskPanel.add(new JLabel("Due (yyyy-MM-dd HH:mm):"));
+        addTaskPanel.add(dueField);
+        addTaskPanel.add(new JLabel("Effort (h):"));
+        addTaskPanel.add(effortField);
+        addTaskPanel.add(new JLabel("Priority:"));
+        addTaskPanel.add(priorityCombo);
+        addTaskPanel.add(new JLabel("Dependencies:"));
+        addTaskPanel.add(dependencyScroll);
+        addTaskPanel.add(addButton);
+
+
+        JPanel buttonPanel = new JPanel();
+        buttonPanel.setLayout(new FlowLayout(FlowLayout.LEFT, 10, 10));
+
         JButton sortDueButton = new JButton("Sort by Due Date");
         JButton sortEffortButton = new JButton("Sort by Effort");
-        JButton sortPrioritybutton = new JButton("Sort by Priority");
+        JButton sortPriorityButton = new JButton("Sort by Priority");
         processButton = new JButton("Process Tasks"); //now it is field
         JButton revertButton = new JButton("Revert Tasks Completion");
         JButton exportButton = new JButton("Export to CSV");// new File export import features
         JButton importButton = new JButton("Import from CSV");
 
+        buttonPanel.add(sortDueButton);
+        buttonPanel.add(sortEffortButton);
+        buttonPanel.add(sortPriorityButton);
+        buttonPanel.add(processButton);
+        buttonPanel.add(revertButton);
+        buttonPanel.add(exportButton);
+        buttonPanel.add(importButton);
+
+        inputPanel.add(addTaskPanel);
+        inputPanel.add(buttonPanel);
 
         manager.setUpdateCallback(
                 () -> {
@@ -87,7 +124,12 @@ public class Main {
                     BigDecimal effort = effortField.getText().isBlank() ? BigDecimal.ZERO : new BigDecimal(effortField.getText());
                     Task.Priority priority = (Task.Priority) priorityCombo.getSelectedItem();
 
-                    Task newTask = Task.createTask(title, "", LocalDateTime.now(), dueDate, false, "General", "", effort, priority);
+                    List<Task> selectedDependencies = dependencyList.getSelectedValuesList();
+                    List<Integer> dependencyIds = selectedDependencies.stream().map(Task::id).toList();
+
+
+                    Task newTask = Task.createTask(title, "", LocalDateTime.now(), dueDate, false,
+                            "General", "", effort, priority, dependencyIds);
                     manager.addTask(newTask);
                     updateTaskDisplay();
                     clearFields(titleField, dueField, effortField);
@@ -111,7 +153,7 @@ public class Main {
             updateTaskDisplay();
         });
 
-        sortPrioritybutton.addActionListener( e->{
+        sortPriorityButton.addActionListener( e->{
             manager.sortByPriority();
             updateTaskDisplay();
         });
@@ -145,26 +187,6 @@ public class Main {
             }
         });
 
-
-
-
-        inputPanel.add(new JLabel("Title:"));
-        inputPanel.add(titleField);
-        inputPanel.add(new JLabel("Due (yyyy-MM-dd HH:mm):"));
-        inputPanel.add(dueField);
-        inputPanel.add(new JLabel("Effort (h):"));
-        inputPanel.add(effortField);
-        inputPanel.add(new JLabel("Priority:"));
-        inputPanel.add(priorityCombo);
-        inputPanel.add(addButton);
-        inputPanel.add(sortDueButton);
-        inputPanel.add(sortEffortButton);
-        inputPanel.add(sortPrioritybutton);
-        inputPanel.add(processButton);
-        inputPanel.add(revertButton);
-        inputPanel.add(exportButton);
-        inputPanel.add(importButton);
-
         frame.setLayout(new BorderLayout());
         frame.add(scrollPane, BorderLayout.CENTER);
         frame.add(inputPanel, BorderLayout.SOUTH);
@@ -172,6 +194,14 @@ public class Main {
         frame.setLocationRelativeTo(null); // Center on screen
         frame.setVisible(true);
 
+    }
+
+    private static void updateDependencyList(JList<Task> dependencyList){
+        DefaultListModel<Task> model = (DefaultListModel<Task>) dependencyList.getModel();
+        model.clear();
+        for (Task task : manager.getAllTasks()){
+            model.addElement(task);
+        }
     }
 
     private static void updateTaskDisplay(){

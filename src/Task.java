@@ -1,6 +1,8 @@
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * @author hatzp
@@ -15,7 +17,8 @@ public record Task(
        String category,
        String notes,
        BigDecimal effort, // in hours
-       Priority priority
+       Priority priority,
+       List<Integer> dependencies // IDs of tasks this task depends on
 ) implements Comparable<Task>{
 
     public enum Priority{
@@ -36,7 +39,9 @@ public record Task(
             String category,
             String notes,
             BigDecimal effort,
-            Priority priority
+            Priority priority,
+            List<Integer> dependencies
+
     ){
         if(title == null || title.isBlank()){
             throw new IllegalArgumentException("Title is null or blank");
@@ -50,9 +55,12 @@ public record Task(
         if(priority == null){
             priority = Priority.MEDIUM;
         }
+        if (dependencies == null) {
+            dependencies = Collections.emptyList();
+        }
 
 
-        return new Task(-1,title, description, createdAt, dueDate, isCompleted, category, notes, effort, priority);
+        return new Task(-1,title, description, createdAt, dueDate, isCompleted, category, notes, effort, priority, dependencies);
     }
 
 
@@ -62,7 +70,7 @@ public record Task(
 
     //Mark as completed
     public Task markCompleted(){
-        return new Task(id, title, description, createdAt, dueDate, true, category, notes, effort, priority);
+        return new Task(id, title, description, createdAt, dueDate, true, category, notes, effort, priority, dependencies);
     }
 
     public String getFormattedDueDate(){
@@ -87,6 +95,7 @@ public record Task(
                 ", category='" + category + '\'' +
                 ", effort=" + effort.stripTrailingZeros().toPlainString() + "h" +
                 ", priority=" + priority +
+                ", dependencies=" + dependencies +
                 '}';
     }
 }

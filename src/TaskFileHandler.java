@@ -3,6 +3,8 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 
@@ -27,12 +29,13 @@ public class TaskFileHandler {
     public void exportToCsv(List<Task> tasks, String filePath){
         try(BufferedWriter writer = new BufferedWriter(new FileWriter(filePath))){
             // Write header row to define CSV structure—matches Task record fields
-            writer.write("id,title,description,created_at,due_date,is_completed,category,notes,effort,priority\n");
+            writer.write("id,title,description,created_at,due_date,is_completed,category,notes,effort,priority,dependencies\n");
 
             // Iterate through tasks and convert each to a CSV row
             for(Task task : tasks){
+                String dependenciesStr = String.join(";",task.dependencies().stream().map(String::valueOf).toList());
                 // Use String.format for structured output; escape quotes and commas to handle special characters
-                String line = String.format("%d, \"%s\",\"%s\",%s,%s,%d,\"%s\",\"%s\",%s,%s",
+                String line = String.format("%d, \"%s\",\"%s\",%s,%s,%d,\"%s\",\"%s\",%s,%s,\"%s\"",
                         task.id(),
                         escapeCsv(task.title()), // Title, quoted to handle commas, same for others escaped
                         escapeCsv(task.description()),
@@ -42,7 +45,8 @@ public class TaskFileHandler {
                         escapeCsv(task.category()),
                         escapeCsv(task.notes()),
                         task.effort() != null ? task.effort().toString() : "",
-                        task.priority().name()
+                        task.priority().name(),
+                        escapeCsv(dependenciesStr)
                 );
                 writer.write(line + "\n");
             }
@@ -72,7 +76,7 @@ public class TaskFileHandler {
                 }
                 String[] fields = parseCsvLine(line); // Custom parser for CSV fields
 
-                if (fields.length != 10) continue; // Skip malformed rows
+                if (fields.length != 11) continue; // Skip malformed rows
 
                 // Parse each field into appropriate type; handle nulls or empty strings
                 int id = Integer.parseInt(fields[0]); // ID as integer
@@ -85,9 +89,10 @@ public class TaskFileHandler {
                 String notes = fields[7];
                 BigDecimal effort = fields[8].isEmpty() ? null : new BigDecimal(fields[8]);
                 Task.Priority priority = Task.Priority.valueOf(fields[9]); // Priority from enum name
+                List<Integer> dependencies = fields[10].isEmpty() ? Collections.emptyList() : Arrays.stream(fields[10].split(";")).map(Integer::parseInt).toList();
 
                 Task task = new Task(id, title, description, createdAt, dueDate, isCompleted,
-                        category, notes, effort, priority);
+                        category, notes, effort, priority, dependencies);
 
                 importedTasks.add(task);
             }

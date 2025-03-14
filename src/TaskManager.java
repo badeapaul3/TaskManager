@@ -28,8 +28,37 @@ public class TaskManager {
     public TaskManager(){
         this.tasks = new ArrayList<>();
         this.fileHandler = new TaskFileHandler();
+        initializeDatabase();
         loadTasksFromDatabase();
     }
+
+    private void initializeDatabase(){
+        try(Connection conn = DriverManager.getConnection(DB_URL);
+            Statement stmt = conn.createStatement()){
+            // Tasks table (unchanged except ensuring it exists)
+            stmt.execute("CREATE table if not exists tasks (" +
+                                "id integer primary key autoincrement, " +
+                                "title text not null, " +
+                                "description text, " +
+                                "created_at text, " +
+                                "due_date text, " +
+                                "is_completed integer, " +
+                                "category text, " +
+                                "notes text, " +
+                                "effort text, " +
+                                "priority text)");
+            // Dependencies table: maps task_id to dependency_id
+            stmt.execute("CREATE TABLE IF NOT EXISTS task_dependencies (" +
+                    "task_id INTEGER, " +
+                    "dependency_id INTEGER, " +
+                    "FOREIGN KEY(task_id) REFERENCES tasks(id), " +
+                    "FOREIGN KEY(dependency_id) REFERENCES tasks(id))");
+        }catch (SQLException e){
+            System.err.println("Database initialization error: " + e.getMessage());
+        }
+    }
+
+
 
     /**
      * Sets a callback to notify the UI when tasks change.
@@ -39,44 +68,66 @@ public class TaskManager {
     public void setUpdateCallback(Runnable callback){
         this.updateCallback = callback;
     }
+
+
     /**
-     * Loads tasks from the SQLite database into the in-memory list.
-     * Thought: Keeps tasks in sync with persistent storage; clears list first to avoid duplicates.
+     * Loads tasks and dependencies from the database into the tasks list.
+     * Orchestrates the loading process by delegating to helper methods.
      */
-    private void loadTasksFromDatabase(){
-        try(Connection conn = DriverManager.getConnection(DB_URL);
-            Statement stmt = conn.createStatement();
-            ResultSet rs = stmt.executeQuery("SELECT * FROM tasks"))
-        {
-            tasks.clear();
-            while (rs.next()){
+    private void loadTasksFromDatabase() {
+        try (Connection conn = DriverManager.getConnection(DB_URL)) {
+            Map<Integer, List<Integer>> dependencyMap = loadDependencies(conn);
+            loadTasks(conn, dependencyMap);
+        } catch (SQLException e) {
+            System.err.println("Database load error: " + e.getMessage());
+        }
+    }
+
+
+    /**
+     * Loads task dependencies from the task_dependencies table into a map.
+     * @param conn Database connection
+     * @return Map of task ID to list of dependency IDs
+     */
+    private Map<Integer, List<Integer>> loadDependencies(Connection conn) throws SQLException {
+        Map<Integer, List<Integer>> dependencyMap = new HashMap<>();
+        try (Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("SELECT task_id, dependency_id FROM task_dependencies")) {
+            while (rs.next()) {
+                int taskId = rs.getInt("task_id");
+                int depId = rs.getInt("dependency_id");
+                // Add dependency ID to the task's list, creating list if absent
+                dependencyMap.computeIfAbsent(taskId, k -> new ArrayList<>()).add(depId);
+            }
+        }
+        return dependencyMap;
+    }
+
+    /**
+     * Loads tasks from the tasks table, linking them with their dependencies.
+     * @param conn Database connection
+     * @param dependencyMap Map of task ID to dependency IDs
+     */
+    private void loadTasks(Connection conn, Map<Integer, List<Integer>> dependencyMap) throws SQLException {
+        try (Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("SELECT * FROM tasks")) {
+            tasks.clear(); // Reset list before loading
+            while (rs.next()) {
                 LocalDateTime createdAt = rs.getString("created_at") != null ?
-                        LocalDateTime.parse(rs.getString("created_at"),DB_FORMATTER) : null;
-
+                        LocalDateTime.parse(rs.getString("created_at"), DB_FORMATTER) : null;
                 LocalDateTime dueDate = rs.getString("due_date") != null ?
-                        LocalDateTime.parse(rs.getString("due_date"),DB_FORMATTER) : null;
-
+                        LocalDateTime.parse(rs.getString("due_date"), DB_FORMATTER) : null;
                 BigDecimal effort = rs.getString("effort") != null ?
                         new BigDecimal(rs.getString("effort")) : null;
-
                 String priorityStr = rs.getString("priority");
                 Task.Priority priority = priorityStr != null ? Task.Priority.valueOf(priorityStr) : Task.Priority.MEDIUM;
-
+                List<Integer> dependencies = dependencyMap.getOrDefault(rs.getInt("id"), Collections.emptyList());
                 tasks.add(new Task(
-                        rs.getInt("id"),
-                        rs.getString("title"),
-                        rs.getString("description"),
-                        createdAt,
-                        dueDate,
-                        rs.getInt("is_completed") == 1,
-                        rs.getString("category"),
-                        rs.getString("notes"),
-                        effort,
-                        priority
+                        rs.getInt("id"), rs.getString("title"), rs.getString("description"),
+                        createdAt, dueDate, rs.getInt("is_completed") == 1,
+                        rs.getString("category"), rs.getString("notes"), effort, priority, dependencies
                 ));
             }
-        }catch (SQLException e){
-            System.err.println("Database load error: " + e.getMessage());
         }
     }
 
@@ -88,8 +139,10 @@ public class TaskManager {
     public synchronized void addTask(Task task){
         int newId = saveTaskToDatabase(task);
         Task taskWithId = new Task(newId, task.title(), task.description(), task.createdAt(),
-                task.dueDate(), task.isCompleted(), task.category(), task.notes(), task.effort(), task.priority());
+                task.dueDate(), task.isCompleted(), task.category(), task.notes(), task.effort(), task.priority(), task.dependencies());
         tasks.add(taskWithId);
+        saveDependenciesToDatabase(newId, task.dependencies());
+        if(updateCallback != null) SwingUtilities.invokeLater(updateCallback);
     }
 
     /**
@@ -124,52 +177,81 @@ public class TaskManager {
         return -1; // Fallback ID if insert fails
     }
 
-    public void addTasks(List<Task> newTasks){
-        for(Task task : newTasks){
-            addTask(task);
+    private void saveDependenciesToDatabase(int taskId, List<Integer> dependencies){
+        try(Connection conn = DriverManager.getConnection(DB_URL);
+            PreparedStatement pstmt = conn.prepareStatement("INSERT INTO task_dependencies (task_id, dependency_id) VALUES (?,?)")){
+            for(int depId : dependencies){
+                pstmt.setInt(1, taskId);
+                pstmt.setInt(2, depId);
+                pstmt.addBatch();
+            }
+            pstmt.executeBatch();
+        }catch (SQLException e){
+            System.err.println("Database dependency insert error: " + e.getMessage());
         }
     }
 
     /**
-     * Processes all incomplete tasks in separate threads, marking them completed.
-     * Thought: Uses threads for parallelism; updates UI via callback as tasks finish.
+     * Processes all incomplete tasks, respecting dependencies, in separate threads.
      */
-    public void processTasks(){
-        List<Task> tasksToProcess = new ArrayList<>(tasks); // Snapshot to avoid concurrent modification
-        if(tasksToProcess.isEmpty()) return; // Early exit
+    public void processTasks() {
+        List<Task> tasksToProcess = new ArrayList<>(tasks);
+        if (tasksToProcess.isEmpty()) {
+            if (updateCallback != null) SwingUtilities.invokeLater(updateCallback);
+            return;
+        }
+        processTaskBatch(tasksToProcess);
+    }
 
-        AtomicInteger activeThreads = new AtomicInteger(tasksToProcess.size()); // Track running threads
-
-        for(Task task : new ArrayList<>(tasks)) { //Copy to avoid concurrentModificationException
-            Thread thread = new Thread(
-                () -> {
-                    synchronized (this){
-                        if(!task.isCompleted()){
-                            System.out.println("Processing " + task.title() + " (Effort: "+ task.effort() + "h) on " + Thread.currentThread().getName());
-                            try{
-                                // Simulate processing time based on effort (hours to milliseconds)
-                                Thread.sleep(task.effort().multiply(BigDecimal.valueOf(1000)).longValue());
-                                Task completedTask = task.markCompleted();
-                                tasks.set(tasks.indexOf(task), completedTask); // Update in-memory
-                                updateTaskInDatabase(completedTask);
-                                System.out.println("Completed " + task.title());
-                                //update UI after each task
-                                if(updateCallback != null){
-                                    SwingUtilities.invokeLater(updateCallback);
-                                }
-                            }catch (InterruptedException e){
-                                Thread.currentThread().interrupt();
-                                System.err.println("Thread interrupted: " + e.getMessage());
-                            }
-                        }
-                    }
-                    if(activeThreads.decrementAndGet() == 0 && updateCallback != null){
-                        SwingUtilities.invokeLater(updateCallback); // Final update
-                    }
-                }
-            );
+    /**
+     * Launches threads to process a batch of tasks.
+     */
+    private void processTaskBatch(List<Task> tasksToProcess) {
+        AtomicInteger activeThreads = new AtomicInteger(tasksToProcess.size());
+        for (Task task : tasksToProcess) {
+            Thread thread = new Thread(() -> processSingleTask(task, activeThreads));
             thread.start();
         }
+    }
+
+    /**
+     * Processes a single task if its dependencies are met.
+     */
+    private void processSingleTask(Task task, AtomicInteger activeThreads) {
+        synchronized (this) {
+            if (!task.isCompleted() && areDependenciesCompleted(task)) {
+                System.out.println("Processing " + task.title() + " (Effort: " + task.effort() + "h)");
+                try {
+                    Thread.sleep(task.effort().multiply(BigDecimal.valueOf(1000)).longValue());
+                    Task completedTask = task.markCompleted();
+                    tasks.set(tasks.indexOf(task), completedTask);
+                    updateTaskInDatabase(completedTask);
+                    System.out.println("Completed " + task.title());
+                    if (updateCallback != null) {
+                        SwingUtilities.invokeLater(updateCallback);
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    System.err.println("Thread interrupted: " + e.getMessage());
+                }
+            }
+        }
+        int remaining = activeThreads.decrementAndGet();
+        if (remaining == 0 && updateCallback != null) {
+            SwingUtilities.invokeLater(updateCallback);
+        }
+    }
+
+    private boolean areDependenciesCompleted(Task task){
+        for (int depId : task.dependencies()){
+            Task dep = tasks.stream().filter(t -> t.id() == depId).findFirst().orElse(null);
+            if(dep == null || !dep.isCompleted()){
+                System.out.println("Cannot process " + task.title() + "!\nDependency " +
+                depId + " not completed");
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
@@ -182,7 +264,7 @@ public class TaskManager {
             for (Task task : tasks) {
                 if (task.isCompleted()) {
                     Task revertedTask = new Task(task.id(), task.title(), task.description(), task.createdAt(),
-                            task.dueDate(), false, task.category(), task.notes(), task.effort(), task.priority());
+                            task.dueDate(), false, task.category(), task.notes(), task.effort(), task.priority(), task.dependencies());
                     updatedTasks.add(revertedTask);
                     updateTaskInDatabase(revertedTask);
                     System.out.println("Reverted " + task.title() + " to incomplete");
