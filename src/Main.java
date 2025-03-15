@@ -13,7 +13,7 @@ import java.util.List;
 public class Main {
 
     private static TaskManager manager;
-    private static JTextArea taskArea;
+    private static JList<Task> taskList;
 
     private static JButton processButton; // Made field to access in callback
 
@@ -24,9 +24,7 @@ public class Main {
             System.err.println("Failed to initialize Task Manager");
             return;
         }
-
-        SwingUtilities.invokeLater(() -> createAndShowGUI());
-
+        SwingUtilities.invokeLater(Main::createAndShowGUI);
     }
 
     private static void createAndShowGUI(){
@@ -43,13 +41,11 @@ public class Main {
         frame.setMinimumSize(new Dimension(800,400));
         frame.setResizable(true);
 
-        //Task display area
-        taskArea = new JTextArea(20,80);
-        taskArea.setEditable(false);
-        taskArea.setLineWrap(true);
-        taskArea.setWrapStyleWord(true);
+        //Task list
+        taskList = new JList<>(new DefaultListModel<>());
+        taskList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         updateTaskDisplay();
-        JScrollPane scrollPane = new JScrollPane(taskArea);
+        JScrollPane scrollPane = new JScrollPane(taskList);
         scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
 
         //Input panel
@@ -93,6 +89,7 @@ public class Main {
         JButton revertButton = new JButton("Revert Tasks Completion");
         JButton exportButton = new JButton("Export to CSV");// new File export import features
         JButton importButton = new JButton("Import from CSV");
+        JButton deleteButton = new JButton("Delete Task");
 
         buttonPanel.add(sortDueButton);
         buttonPanel.add(sortEffortButton);
@@ -101,10 +98,12 @@ public class Main {
         buttonPanel.add(revertButton);
         buttonPanel.add(exportButton);
         buttonPanel.add(importButton);
+        buttonPanel.add(deleteButton);
 
         inputPanel.add(addTaskPanel);
         inputPanel.add(buttonPanel);
 
+        //Event listeners
         manager.setUpdateCallback(
                 () -> {
                     updateTaskDisplay();
@@ -187,6 +186,23 @@ public class Main {
             }
         });
 
+        deleteButton.addActionListener(e -> {
+            Task selectedTask = taskList.getSelectedValue();
+            if(selectedTask != null){
+                boolean deleted = manager.deleteTask(selectedTask.id());
+                if(deleted){
+                    updateTaskDisplay();
+                    updateDependencyList(dependencyList);
+                    JOptionPane.showMessageDialog(frame, "Task deleted: " + selectedTask.title() + " with id " + selectedTask.id());
+                }else{
+                    JOptionPane.showMessageDialog(frame, "Cannot delete " + selectedTask.title() + " with id " + selectedTask.id()
+                            + ".\nOther tasks depend on it.");
+                }
+            }else{
+                JOptionPane.showMessageDialog(frame, "Please select a task to delete.");
+            }
+        });
+
         frame.setLayout(new BorderLayout());
         frame.add(scrollPane, BorderLayout.CENTER);
         frame.add(inputPanel, BorderLayout.SOUTH);
@@ -205,9 +221,10 @@ public class Main {
     }
 
     private static void updateTaskDisplay(){
-        taskArea.setText("");
+        DefaultListModel<Task> model = (DefaultListModel<Task>) taskList.getModel();
+        model.clear();
         for(Task task : manager.getTasksByCategory(null)){
-            taskArea.append(task.toString() + "\n");
+            model.addElement(task);
         }
     }
 

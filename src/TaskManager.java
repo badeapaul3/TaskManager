@@ -192,6 +192,55 @@ public class TaskManager {
     }
 
     /**
+     * Deletes a task by ID if no other tasks depend on it.
+     * @param taskId ID of the task to delete
+     * @return true if deleted, false if blocked by dependencies
+     */
+    public synchronized boolean deleteTask(int taskId){
+        //check if it is a dependency
+        for(Task t : tasks){
+            if(t.dependencies().contains(taskId)){
+                System.out.println("Cannot delete task " + taskId + ": required by " + t.title() + " with id " + t.id());
+                return false;
+            }
+        }
+        //remove from list and DB
+        Task taskToDelete = tasks.stream().filter(t -> t.id() == taskId).findFirst().orElse(null);
+        if(taskToDelete != null){
+            tasks.remove(taskToDelete);
+            deleteTaskFromDatabase(taskId);
+            if(updateCallback != null) SwingUtilities.invokeLater(updateCallback);
+            System.out.println("Deleted task " + taskId);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Removes a task and its dependency entries from the database.
+     */
+    private void deleteTaskFromDatabase(int taskId){
+        try(Connection conn = DriverManager.getConnection(DB_URL)){
+            //Delete dependencies where taskId is the depender
+            try(PreparedStatement pstmt = conn.prepareStatement("delete from task_dependencies where task_id = ?")){
+                pstmt.setInt(1,taskId);
+                pstmt.executeUpdate();
+            }
+            //Delete the task
+            try(PreparedStatement pstmt = conn.prepareStatement("delete from tasks where id = ?")){
+                pstmt.setInt(1, taskId);
+                pstmt.executeUpdate();
+            }
+        }catch (SQLException e){
+            System.err.println("Database delete error: " + e.getMessage());
+        }
+
+    }
+
+
+
+
+    /**
      * Processes all incomplete tasks, respecting dependencies, in separate threads.
      */
     public void processTasks() {
@@ -202,6 +251,7 @@ public class TaskManager {
         }
         processTaskBatch(tasksToProcess);
     }
+
 
     /**
      * Launches threads to process a batch of tasks.
@@ -348,7 +398,7 @@ public class TaskManager {
     }
 
     public List<Task> getAllTasks(){
-        return tasks;
+        return new ArrayList<>(tasks);
     }
 
     /**
@@ -376,18 +426,22 @@ public class TaskManager {
 
     public synchronized void importTasksFromCsv(String filePath){
         List<Task> importedTasks = fileHandler.importFromCsv(filePath); // Get tasks from file
-
-        for(Task imported : importedTasks){
-            tasks.removeIf(t -> t.id() == imported.id()); // Replace duplicates by ID
-            tasks.add(imported);
-            saveTaskToDatabase(imported); // Ensure DB consistency
-        }
+        integrateImportedTasks(importedTasks);
         if(updateCallback !=null){
             SwingUtilities.invokeLater(updateCallback); //Refresh UI
         }
-
-
     }
+
+    private void integrateImportedTasks(List<Task> importedTasks){
+        for(Task imported : importedTasks){
+            tasks.removeIf(t -> t.id() == imported.id()); // remove duplicates by ID
+            tasks.add(imported);
+            saveTaskToDatabase(imported); // Ensure DB consistency
+            saveDependenciesToDatabase(imported.id(), imported.dependencies());
+        }
+    }
+
+
 
 
 
