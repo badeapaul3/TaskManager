@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 
 /**
@@ -15,7 +16,10 @@ public class Main {
     private static TaskManager manager;
     private static JList<Task> taskList;
 
+    private static JButton addButton; // static for mode toggle
     private static JButton processButton; // Made field to access in callback
+
+    private static Task editingTask = null; //task being edited
 
     public static void main(String[] args) throws InterruptedException {
 
@@ -37,8 +41,8 @@ public class Main {
         //Main window
         JFrame frame = new JFrame("Task Manager");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        frame.setSize(1000,600);
-        frame.setMinimumSize(new Dimension(800,400));
+        frame.setSize(1600,800);
+        frame.setMinimumSize(new Dimension(1400,500));
         frame.setResizable(true);
 
         //Task list
@@ -52,8 +56,10 @@ public class Main {
         JPanel inputPanel = new JPanel();
         inputPanel.setLayout(new GridLayout(2, 1, 10,10));
 
+        //add/edit task panel
         JPanel addTaskPanel = new JPanel();
         addTaskPanel.setLayout(new FlowLayout(FlowLayout.LEFT, 10, 10));
+        addTaskPanel.setPreferredSize(new Dimension(1100,150));
 
         JTextField titleField = new JTextField(20);
         JTextField dueField = new JTextField(15); // Format: yyyy-MM-dd HH:mm
@@ -64,7 +70,7 @@ public class Main {
         updateDependencyList(dependencyList);
         JScrollPane dependencyScroll = new JScrollPane(dependencyList);
         dependencyScroll.setPreferredSize(new Dimension(200,100));
-        JButton addButton = new JButton("Add Task");
+        addButton = new JButton("Add Task");
 
         addTaskPanel.add(new JLabel("Title:"));
         addTaskPanel.add(titleField);
@@ -80,7 +86,7 @@ public class Main {
 
 
         JPanel buttonPanel = new JPanel();
-        buttonPanel.setLayout(new FlowLayout(FlowLayout.LEFT, 10, 10));
+        buttonPanel.setLayout(new FlowLayout(FlowLayout.LEFT, 20, 20));
 
         JButton sortDueButton = new JButton("Sort by Due Date");
         JButton sortEffortButton = new JButton("Sort by Effort");
@@ -90,6 +96,7 @@ public class Main {
         JButton exportButton = new JButton("Export to CSV");// new File export import features
         JButton importButton = new JButton("Import from CSV");
         JButton deleteButton = new JButton("Delete Task");
+        JButton editButton = new JButton("Edit Task");
 
         buttonPanel.add(sortDueButton);
         buttonPanel.add(sortEffortButton);
@@ -99,6 +106,7 @@ public class Main {
         buttonPanel.add(exportButton);
         buttonPanel.add(importButton);
         buttonPanel.add(deleteButton);
+        buttonPanel.add(editButton);
 
         inputPanel.add(addTaskPanel);
         inputPanel.add(buttonPanel);
@@ -107,9 +115,11 @@ public class Main {
         manager.setUpdateCallback(
                 () -> {
                     updateTaskDisplay();
-                    if(manager.getTasksDueBefore(LocalDateTime.now().plusYears(10)).isEmpty()){
-                        processButton.setEnabled(true);
-                    }
+                    updateDependencyList(dependencyList);
+                    processButton.setEnabled(true);
+                    processButton.repaint();
+                    //reset to add mode after updates
+                    resetInputFields(titleField, dueField, effortField, priorityCombo, dependencyList, addTaskPanel);
                 }
         );
 
@@ -126,13 +136,18 @@ public class Main {
                     List<Task> selectedDependencies = dependencyList.getSelectedValuesList();
                     List<Integer> dependencyIds = selectedDependencies.stream().map(Task::id).toList();
 
-
-                    Task newTask = Task.createTask(title, "", LocalDateTime.now(), dueDate, false,
-                            "General", "", effort, priority, dependencyIds);
-                    manager.addTask(newTask);
+                    if(editingTask == null) {
+                        Task newTask = Task.createTask(title, "", LocalDateTime.now(), dueDate, false,
+                                "General", "", effort, priority, dependencyIds);
+                        manager.addTask(newTask);
+                    } else {
+                        Task updatedTask = new Task(editingTask.id(), title, editingTask.description(), editingTask.createdAt(),
+                                dueDate, editingTask.isCompleted(), editingTask.category(), editingTask.notes(), effort, priority, dependencyIds);
+                        manager.updateTask(updatedTask);
+                    }
                     updateTaskDisplay();
-                    clearFields(titleField, dueField, effortField);
-
+                    updateDependencyList(dependencyList);
+                    resetInputFields(titleField, dueField, effortField, priorityCombo, dependencyList, addTaskPanel);
 
                 } catch (DateTimeParseException ex) {
                     JOptionPane.showMessageDialog(frame, "Invalid date format. Use yyyy-MM-dd HH:mm");
@@ -203,6 +218,33 @@ public class Main {
             }
         });
 
+        editButton.addActionListener(e -> {
+            Task selectedTask = taskList.getSelectedValue();
+            if(selectedTask != null){
+                editingTask = selectedTask;
+                titleField.setText(selectedTask.title());
+                dueField.setText(selectedTask.dueDate() != null ? selectedTask.dueDate().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")): "");
+                effortField.setText(selectedTask.effort().toString());
+                priorityCombo.setSelectedItem(selectedTask.priority());
+                DefaultListModel<Task> depModel = (DefaultListModel<Task>) dependencyList.getModel();
+                List<Integer> depIndices = new ArrayList<>();
+                for(int i = 0; i < depModel.size(); i++){
+                    if(selectedTask.dependencies().contains(depModel.get(i))){
+                        depIndices.add(i);
+                    }
+                }
+
+                dependencyList.setSelectedIndices(depIndices.stream().mapToInt(Integer::intValue).toArray());
+                addButton.setText("Save Changes");
+                //Added to ensure button visibility
+                addButton.setVisible(true);
+                addTaskPanel.revalidate();
+                addTaskPanel.repaint();
+            } else{
+                JOptionPane.showMessageDialog(frame, "Please select a task to edit.");
+            }
+        });
+
         frame.setLayout(new BorderLayout());
         frame.add(scrollPane, BorderLayout.CENTER);
         frame.add(inputPanel, BorderLayout.SOUTH);
@@ -232,6 +274,22 @@ public class Main {
         for (JTextField field : fields){
             field.setText("");
         }
+    }
+
+    // Step 10: Added to refactor duplicated reset logic DRY principle - Don't repeat yourself
+    private static void resetInputFields(JTextField titleField, JTextField dueField, JTextField effortField,
+                                         JComboBox<Task.Priority> priorityCombo, JList<Task> dependencyList, JPanel addTaskPanel) {
+        updateTaskDisplay();
+        updateDependencyList(dependencyList);
+        clearFields(titleField, dueField, effortField);
+        priorityCombo.setSelectedItem(Task.Priority.MEDIUM);
+        dependencyList.clearSelection();
+        editingTask = null;
+        addButton.setText("Add Task");
+
+        addButton.setVisible(true);
+        addTaskPanel.revalidate();
+        addTaskPanel.repaint();
     }
 
 }

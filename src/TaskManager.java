@@ -328,18 +328,48 @@ public class TaskManager {
     }
 
     /**
-     * Updates a task’s completion status in the database.
-     * @param task Task to update
-     * Thought: Minimal update to avoid overwriting other fields; used by processTasks and revertTasks.
+     * Updates an existing task with new details.
+     * @param updatedTask Task with updated fields (must have existing ID)
      */
-    protected void updateTaskInDatabase(Task task){
-        try(Connection conn = DriverManager.getConnection(DB_URL);
-            PreparedStatement pstmt = conn.prepareStatement("update tasks set is_completed = ? where id = ?")
-        ){
-            pstmt.setInt(1, task.isCompleted() ? 1 : 0);
-            pstmt.setInt(2, task.id());
-            pstmt.executeUpdate();
+    public synchronized void updateTask(Task updatedTask){
+        int index = tasks.indexOf(tasks.stream().filter(t -> t.id() == updatedTask.id()).findFirst().orElse(null));
+        if(index != -1){
+            tasks.set(index,updatedTask);
+            updateTaskInDatabase(updatedTask);
+            saveDependenciesToDatabase(updatedTask.id(), updatedTask.dependencies());
 
+            if(updateCallback != null) SwingUtilities.invokeLater(updateCallback);
+            System.out.println("Updated task with id " + updatedTask.id());
+        }
+    }
+
+
+    /**
+     * Updates a task in the database and replaces its dependencies.
+     */
+    private void updateTaskInDatabase(Task task){
+        try(Connection conn = DriverManager.getConnection(DB_URL)) {
+            try(PreparedStatement pstmt = conn.prepareStatement(
+                    "update tasks set title = ?, description = ?, created_at = ?, due_date = ?, is_completed = ?, " +
+                            "category = ?, notes = ?, effort = ?, priority = ? where id = ?"
+            )){
+                pstmt.setString(1, task.title());
+                pstmt.setString(2, task.description());
+                pstmt.setString(3, task.createdAt() != null ? task.createdAt().format(DB_FORMATTER ) : null);
+                pstmt.setString(4, task.dueDate() != null ? task.dueDate().format(DB_FORMATTER ) : null);
+                pstmt.setInt(5, task.isCompleted() ? 1 : 0);
+                pstmt.setString(6, task.category());
+                pstmt.setString(7, task.notes());
+                pstmt.setString(8, task.effort() != null ? task.effort().toString() : null);
+                pstmt.setString(9, task.priority().name());
+                pstmt.setInt(10, task.id());
+                pstmt.executeUpdate();
+            }
+
+            try(PreparedStatement pstmt = conn.prepareStatement("delete from task_dependencies where task_id = ?")){
+                pstmt.setInt(1, task.id());
+                pstmt.executeUpdate();
+            }
         }catch (SQLException e){
             System.err.println("Database update error: " + e.getMessage());
         }
