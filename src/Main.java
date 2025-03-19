@@ -5,7 +5,6 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
 
 /**
@@ -33,11 +32,6 @@ public class Main {
 
     private static void createAndShowGUI(){
 
-        if (manager == null) {
-            JOptionPane.showMessageDialog(null, "TaskManager not initialized!");
-            return;
-        }
-
         //Main window
         JFrame frame = new JFrame("Task Manager");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -48,7 +42,7 @@ public class Main {
         //Task list
         taskList = new JList<>(new DefaultListModel<>());
         taskList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        updateTaskDisplay();
+        updateTaskDisplay(null);
         JScrollPane scrollPane = new JScrollPane(taskList);
         scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
 
@@ -71,6 +65,10 @@ public class Main {
         JScrollPane dependencyScroll = new JScrollPane(dependencyList);
         dependencyScroll.setPreferredSize(new Dimension(200,100));
         addButton = new JButton("Add Task");
+        JComboBox<String> categoryCombo = new JComboBox<>();
+        categoryCombo.setEditable(true);
+        updateCategoryCombo(categoryCombo);
+
 
         addTaskPanel.add(new JLabel("Title:"));
         addTaskPanel.add(titleField);
@@ -80,6 +78,8 @@ public class Main {
         addTaskPanel.add(effortField);
         addTaskPanel.add(new JLabel("Priority:"));
         addTaskPanel.add(priorityCombo);
+        addTaskPanel.add(new JLabel("Category: "));
+        addTaskPanel.add(categoryCombo);
         addTaskPanel.add(new JLabel("Dependencies:"));
         addTaskPanel.add(dependencyScroll);
         addTaskPanel.add(addButton);
@@ -87,6 +87,11 @@ public class Main {
 
         JPanel buttonPanel = new JPanel();
         buttonPanel.setLayout(new FlowLayout(FlowLayout.LEFT, 20, 20));
+
+        JComboBox<String> filterCategoryCombo = new JComboBox<>();
+        filterCategoryCombo.setEditable(false);
+        filterCategoryCombo.setPreferredSize(new Dimension(150,25)); // ensure visible size
+
 
         JButton sortDueButton = new JButton("Sort by Due Date");
         JButton sortEffortButton = new JButton("Sort by Effort");
@@ -98,6 +103,9 @@ public class Main {
         JButton deleteButton = new JButton("Delete Task");
         JButton editButton = new JButton("Edit Task");
 
+
+        buttonPanel.add(new JLabel("Filter by Category:"));
+        buttonPanel.add(filterCategoryCombo);
         buttonPanel.add(sortDueButton);
         buttonPanel.add(sortEffortButton);
         buttonPanel.add(sortPriorityButton);
@@ -111,15 +119,20 @@ public class Main {
         inputPanel.add(addTaskPanel);
         inputPanel.add(buttonPanel);
 
+        updateFilterCategoryCombo(filterCategoryCombo);
+        filterCategoryCombo.setSelectedItem("All Categories");
+
         //Event listeners
         manager.setUpdateCallback(
                 () -> {
-                    updateTaskDisplay();
+                    updateTaskDisplay((String) filterCategoryCombo.getSelectedItem());
                     updateDependencyList(dependencyList);
+                    updateCategoryCombo(categoryCombo);
+                    updateFilterCategoryCombo(filterCategoryCombo);
                     processButton.setEnabled(true);
                     processButton.repaint();
                     //reset to add mode after updates
-                    resetInputFields(titleField, dueField, effortField, priorityCombo, dependencyList, addTaskPanel);
+                    resetInputFields(titleField, dueField, effortField, priorityCombo, categoryCombo, dependencyList, addTaskPanel);
                 }
         );
 
@@ -132,22 +145,23 @@ public class Main {
                             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
                     BigDecimal effort = effortField.getText().isBlank() ? BigDecimal.ZERO : new BigDecimal(effortField.getText());
                     Task.Priority priority = (Task.Priority) priorityCombo.getSelectedItem();
+                    String category = (String) categoryCombo.getSelectedItem();
 
                     List<Task> selectedDependencies = dependencyList.getSelectedValuesList();
                     List<Integer> dependencyIds = selectedDependencies.stream().map(Task::id).toList();
 
                     if(editingTask == null) {
                         Task newTask = Task.createTask(title, "", LocalDateTime.now(), dueDate, false,
-                                "General", "", effort, priority, dependencyIds);
+                                category, "", effort, priority, dependencyIds);
                         manager.addTask(newTask);
                     } else {
                         Task updatedTask = new Task(editingTask.id(), title, editingTask.description(), editingTask.createdAt(),
-                                dueDate, editingTask.isCompleted(), editingTask.category(), editingTask.notes(), effort, priority, dependencyIds);
+                                dueDate, editingTask.isCompleted(), category, editingTask.notes(), effort, priority, dependencyIds);
                         manager.updateTask(updatedTask);
                     }
-                    updateTaskDisplay();
+                    updateTaskDisplay((String) filterCategoryCombo.getSelectedItem());
                     updateDependencyList(dependencyList);
-                    resetInputFields(titleField, dueField, effortField, priorityCombo, dependencyList, addTaskPanel);
+                    resetInputFields(titleField, dueField, effortField, priorityCombo, categoryCombo, dependencyList, addTaskPanel);
 
                 } catch (DateTimeParseException ex) {
                     JOptionPane.showMessageDialog(frame, "Invalid date format. Use yyyy-MM-dd HH:mm");
@@ -159,17 +173,17 @@ public class Main {
 
         sortDueButton.addActionListener(e -> {
             manager.sortByDueDate();
-            updateTaskDisplay();
+            updateTaskDisplay((String) filterCategoryCombo.getSelectedItem());
         });
 
         sortEffortButton.addActionListener(e -> {
             manager.sortByEffort();
-            updateTaskDisplay();
+            updateTaskDisplay((String) filterCategoryCombo.getSelectedItem());
         });
 
         sortPriorityButton.addActionListener( e->{
             manager.sortByPriority();
-            updateTaskDisplay();
+            updateTaskDisplay((String) filterCategoryCombo.getSelectedItem());
         });
 
         processButton.addActionListener(e -> {
@@ -180,7 +194,7 @@ public class Main {
 
         revertButton.addActionListener(e -> {
             manager.revertTasks();
-            updateTaskDisplay();
+            updateTaskDisplay((String) filterCategoryCombo.getSelectedItem());
         });
 
         exportButton.addActionListener(e -> {
@@ -206,7 +220,7 @@ public class Main {
             if(selectedTask != null){
                 boolean deleted = manager.deleteTask(selectedTask.id());
                 if(deleted){
-                    updateTaskDisplay();
+                    updateTaskDisplay((String) filterCategoryCombo.getSelectedItem());
                     updateDependencyList(dependencyList);
                     JOptionPane.showMessageDialog(frame, "Task deleted: " + selectedTask.title() + " with id " + selectedTask.id());
                 }else{
@@ -226,10 +240,13 @@ public class Main {
                 dueField.setText(selectedTask.dueDate() != null ? selectedTask.dueDate().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")): "");
                 effortField.setText(selectedTask.effort().toString());
                 priorityCombo.setSelectedItem(selectedTask.priority());
+
+                categoryCombo.setSelectedItem(selectedTask.category() != null ? selectedTask.category() : "");
+
                 DefaultListModel<Task> depModel = (DefaultListModel<Task>) dependencyList.getModel();
                 List<Integer> depIndices = new ArrayList<>();
                 for(int i = 0; i < depModel.size(); i++){
-                    if(selectedTask.dependencies().contains(depModel.get(i))){
+                    if(selectedTask.dependencies().contains(depModel.get(i).id())){
                         depIndices.add(i);
                     }
                 }
@@ -245,6 +262,11 @@ public class Main {
             }
         });
 
+        filterCategoryCombo.addActionListener(e -> {
+            String selectedCategory = (String) filterCategoryCombo.getSelectedItem();
+            updateTaskDisplay(selectedCategory == null || selectedCategory.equals("All Categories") ? null : selectedCategory);
+        });
+
         frame.setLayout(new BorderLayout());
         frame.add(scrollPane, BorderLayout.CENTER);
         frame.add(inputPanel, BorderLayout.SOUTH);
@@ -252,7 +274,17 @@ public class Main {
         frame.setLocationRelativeTo(null); // Center on screen
         frame.setVisible(true);
 
+        SwingUtilities.invokeLater(() -> {
+            updateFilterCategoryCombo(filterCategoryCombo);
+            filterCategoryCombo.setSelectedItem("All Categories");
+            filterCategoryCombo.revalidate();
+            filterCategoryCombo.repaint();
+            System.out.println("Post-render: Items: " + filterCategoryCombo.getItemCount() +
+                    ", Selected: " + filterCategoryCombo.getSelectedItem());
+        });
+
     }
+
 
     private static void updateDependencyList(JList<Task> dependencyList){
         DefaultListModel<Task> model = (DefaultListModel<Task>) dependencyList.getModel();
@@ -262,10 +294,10 @@ public class Main {
         }
     }
 
-    private static void updateTaskDisplay(){
+    private static void updateTaskDisplay(String category){
         DefaultListModel<Task> model = (DefaultListModel<Task>) taskList.getModel();
         model.clear();
-        for(Task task : manager.getTasksByCategory(null)){
+        for(Task task : manager.getTasksByCategory(category)){
             model.addElement(task);
         }
     }
@@ -278,18 +310,37 @@ public class Main {
 
     // Step 10: Added to refactor duplicated reset logic DRY principle - Don't repeat yourself
     private static void resetInputFields(JTextField titleField, JTextField dueField, JTextField effortField,
-                                         JComboBox<Task.Priority> priorityCombo, JList<Task> dependencyList, JPanel addTaskPanel) {
-        updateTaskDisplay();
+                                         JComboBox<Task.Priority> priorityCombo, JComboBox<String> categoryCombo,
+                                         JList<Task> dependencyList, JPanel addTaskPanel) {
         updateDependencyList(dependencyList);
         clearFields(titleField, dueField, effortField);
         priorityCombo.setSelectedItem(Task.Priority.MEDIUM);
+        categoryCombo.setSelectedItem(null);
         dependencyList.clearSelection();
         editingTask = null;
         addButton.setText("Add Task");
-
         addButton.setVisible(true);
         addTaskPanel.revalidate();
         addTaskPanel.repaint();
+    }
+
+    private static void updateCategoryCombo(JComboBox<String> categoryCombo){
+        String selected = (String) categoryCombo.getSelectedItem();
+        categoryCombo.removeAllItems();
+        for(String category : manager.getCategories()){
+            categoryCombo.addItem(category);
+        }
+        categoryCombo.setSelectedItem(selected);
+    }
+
+    private static void updateFilterCategoryCombo(JComboBox<String> filterCategoryCombo){
+        String selected = (String) filterCategoryCombo.getSelectedItem();
+        filterCategoryCombo.removeAllItems();
+        filterCategoryCombo.addItem("All Categories");
+        for(String category : manager.getCategories()){
+            filterCategoryCombo.addItem(category);
+        }
+        filterCategoryCombo.setSelectedItem(selected != null && filterCategoryCombo.getItemCount() > 1 ? selected : "All Categories");
     }
 
 }
