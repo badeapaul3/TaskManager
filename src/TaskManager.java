@@ -1,4 +1,5 @@
 import javax.swing.*;
+import java.sql.*;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -15,7 +16,7 @@ public class TaskManager {
         db = new TaskDatabase();
         processor = new TaskProcessor(tasks, db, new TopoSortStrategy());
         fileHandler = new TaskFileHandler();
-        db.loadTasks(tasks);
+        reloadTasks();
     }
 
     public void setUpdateCallback(Runnable callback) {
@@ -45,14 +46,20 @@ public class TaskManager {
     public boolean deleteTask(int taskId) {
         synchronized (this) {
             Task task = tasks.stream().filter(t -> t.id() == taskId).findFirst().orElse(null);
-            if (task != null && !isDependency(taskId)) {
+            if (task == null) {
+                JOptionPane.showMessageDialog(null, "Task with ID " + taskId + " not found"); // Step 13
+                return false;
+            }
+            if (!isDependency(taskId)) {
                 tasks.remove(task);
                 db.deleteTask(taskId);
-                processor.updateGraphAfterDelete(taskId); // Step 12.2: Update graph after deletion
+                processor.updateGraphAfterDelete(taskId);
                 if (updateCallback != null) SwingUtilities.invokeLater(updateCallback);
                 return true;
+            } else {
+                JOptionPane.showMessageDialog(null, "Cannot delete task " + taskId + ": it is a dependency"); // Step 13
+                return false;
             }
-            return false;
         }
     }
 
@@ -148,25 +155,23 @@ public class TaskManager {
     public void importTasksFromCsv(String filename) {
         try { // Step 13: Wrap file operation
             List<Task> importedTasks = fileHandler.importFromCsv(filename);
-            integrateImportedTasks(importedTasks);
+            synchronized (this) {
+                tasks.clear(); // Step 13: Fix CSV duplication
+                db.resetDatabase(); // Step 13: Wipe DB before import
+                for (Task task : importedTasks) {
+                    if (task == null) continue; // Step 13: Skip invalid imports
+                    int newId = db.saveTask(task);
+                    if (newId == -1) continue; // Step 13: Skip failed saves
+                    Task taskWithId = new Task(newId, task.title(), task.description(), task.createdAt(),
+                            task.dueDate(), task.isCompleted(), task.category(), task.notes(), task.effort(), task.priority(), task.dependencies());
+                    tasks.add(taskWithId);
+                    db.saveDependencies(newId, task.dependencies());
+                    processor.updateGraph(taskWithId); // Step 12.2: Update graph for imported tasks
+                }
+                if (updateCallback != null) SwingUtilities.invokeLater(updateCallback);
+            }
         } catch (Exception e) {
             JOptionPane.showMessageDialog(null, "Failed to import tasks: " + e.getMessage()); // Step 13
-        }
-    }
-
-    private void integrateImportedTasks(List<Task> importedTasks) {
-        synchronized (this) {
-            for (Task task : importedTasks) {
-                if (task == null) continue; // Step 13: Skip invalid imports
-                int newId = db.saveTask(task);
-                if (newId == -1) continue; // Step 13: Skip failed saves
-                Task taskWithId = new Task(newId, task.title(), task.description(), task.createdAt(),
-                        task.dueDate(), task.isCompleted(), task.category(), task.notes(), task.effort(), task.priority(), task.dependencies());
-                tasks.add(taskWithId);
-                db.saveDependencies(newId, task.dependencies());
-                processor.updateGraph(taskWithId); // Step 12.2: Update graph for imported tasks
-            }
-            if (updateCallback != null) SwingUtilities.invokeLater(updateCallback);
         }
     }
 
@@ -181,5 +186,24 @@ public class TaskManager {
 
     private boolean isDependency(int taskId) {
         return tasks.stream().anyMatch(t -> t.dependencies().contains(taskId));
+    }
+
+    public void reloadTasks() {
+        synchronized (this) {
+            tasks.clear();
+            db.loadTasks(tasks);
+            processor.updateGraphAfterRevert();
+            if (updateCallback != null) SwingUtilities.invokeLater(updateCallback);
+        }
+    }
+
+    private void resetDatabase() { // Step 13: Helper for import
+        try (Connection conn = DriverManager.getConnection("jdbc:sqlite:C:/Users/hatzp/Desktop/Programming/OCP17/TaskManager/taskmanager.sqlite");
+             Statement stmt = conn.createStatement()) {
+            stmt.execute("DELETE FROM tasks");
+            stmt.execute("DELETE FROM task_dependencies");
+        } catch (SQLException e) {
+            JOptionPane.showMessageDialog(null, "Failed to reset database: " + e.getMessage()); // Step 13
+        }
     }
 }

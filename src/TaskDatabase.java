@@ -6,7 +6,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 public class TaskDatabase {
-    private static final String DB_URL = "jdbc:sqlite:tasks.db";
+    private static final String DB_URL = "jdbc:sqlite:C:/Users/hatzp/Desktop/Programming/OCP17/TaskManager/taskmanager.sqlite";
     private static final DateTimeFormatter DB_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
     public TaskDatabase() {
@@ -33,7 +33,7 @@ public class TaskDatabase {
                     "FOREIGN KEY(task_id) REFERENCES tasks(id), " +
                     "FOREIGN KEY(dependency_id) REFERENCES tasks(id))");
         } catch (SQLException e) {
-            JOptionPane.showMessageDialog(null, "Failed to initialize database: " + e.getMessage());
+            JOptionPane.showMessageDialog(null, "Failed to initialize database: " + e.getMessage()); // Step 13
             throw new RuntimeException("Database initialization failed", e);
         }
     }
@@ -44,7 +44,7 @@ public class TaskDatabase {
             loadTasks(conn, dependencyMap, tasks);
         } catch (SQLException e) {
             JOptionPane.showMessageDialog(null, "Failed to load tasks from database: " + e.getMessage()); // Step 13
-            tasks.clear(); // Step 13: Reset to safe state
+            tasks.clear();
         }
     }
 
@@ -104,7 +104,7 @@ public class TaskDatabase {
             }
         } catch (SQLException e) {
             JOptionPane.showMessageDialog(null, "Failed to save task: " + e.getMessage()); // Step 13
-            return -1; // Step 13: Indicate failure
+            return -1;
         }
         return -1;
     }
@@ -157,6 +157,16 @@ public class TaskDatabase {
             pstmt.executeUpdate();
         } catch (SQLException e) {
             JOptionPane.showMessageDialog(null, "Failed to update task: " + e.getMessage()); // Step 13
+        }
+    }
+
+    public void resetDatabase() { // Step 13: Added for CSV import fix
+        try (Connection conn = DriverManager.getConnection(DB_URL);
+             Statement stmt = conn.createStatement()) {
+            stmt.execute("DELETE FROM tasks");
+            stmt.execute("DELETE FROM task_dependencies");
+        } catch (SQLException e) {
+            JOptionPane.showMessageDialog(null, "Failed to reset database: " + e.getMessage()); // Step 13
         }
     }
 }
