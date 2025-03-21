@@ -22,9 +22,14 @@ public class Main {
 
     public static void main(String[] args) throws InterruptedException {
 
-        manager = new TaskManager();
-        if (manager == null){
-            System.err.println("Failed to initialize Task Manager");
+        try { // Step 13: Wrap manager initialization
+            manager = new TaskManager();
+            if (manager == null) {
+                throw new RuntimeException("TaskManager initialization returned null"); // Step 13
+            }
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(null, "Failed to initialize Task Manager: " + e.getMessage()); // Step 13
+            System.err.println("Failed to initialize Task Manager: " + e.getMessage());
             return;
         }
         SwingUtilities.invokeLater(Main::createAndShowGUI);
@@ -162,39 +167,62 @@ public class Main {
                     updateTaskDisplay((String) filterCategoryCombo.getSelectedItem());
                     updateDependencyList(dependencyList);
                     resetInputFields(titleField, dueField, effortField, priorityCombo, categoryCombo, dependencyList, addTaskPanel);
-
+                } catch (NumberFormatException ex) {
+                    JOptionPane.showMessageDialog(frame, "Invalid effort value: " + ex.getMessage()); // Step 13
                 } catch (DateTimeParseException ex) {
-                    JOptionPane.showMessageDialog(frame, "Invalid date format. Use yyyy-MM-dd HH:mm");
+                    JOptionPane.showMessageDialog(frame, "Invalid date format. Use yyyy-MM-dd HH:mm. Details: " + ex.getMessage());
+                } catch (IllegalArgumentException ex) {
+                    JOptionPane.showMessageDialog(frame, ex.getMessage()); // Step 13: Show validation errors
                 } catch (Exception ex) {
-                    JOptionPane.showMessageDialog(frame, ex.getMessage());
+                    JOptionPane.showMessageDialog(frame, "Error adding task: "+ ex.getMessage());
                 }
             }
         );
 
         sortDueButton.addActionListener(e -> {
-            manager.sortByDueDate();
-            updateTaskDisplay((String) filterCategoryCombo.getSelectedItem());
+            try { // Step 13: Wrap sorting
+                manager.sortByDueDate();
+                updateTaskDisplay((String) filterCategoryCombo.getSelectedItem());
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(frame, "Error sorting by due date: " + ex.getMessage()); // Step 13
+            }
         });
 
         sortEffortButton.addActionListener(e -> {
-            manager.sortByEffort();
-            updateTaskDisplay((String) filterCategoryCombo.getSelectedItem());
+            try { // Step 13: Wrap sorting
+                manager.sortByEffort();
+                updateTaskDisplay((String) filterCategoryCombo.getSelectedItem());
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(frame, "Error sorting by effort: " + ex.getMessage()); // Step 13
+            }
         });
 
         sortPriorityButton.addActionListener( e->{
-            manager.sortByPriority();
-            updateTaskDisplay((String) filterCategoryCombo.getSelectedItem());
+            try { // Step 13: Wrap sorting
+                manager.sortByPriority();
+                updateTaskDisplay((String) filterCategoryCombo.getSelectedItem());
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(frame, "Error sorting by priority: " + ex.getMessage()); // Step 13
+            }
         });
 
         processButton.addActionListener(e -> {
-            processButton.setEnabled(false);
-            new Thread(
-                    () -> manager.processTasks()).start(); // Simplified - logic moved to TaskManager
+            try { // Step 13: Wrap processing
+                processButton.setEnabled(false);
+                new Thread(() -> manager.processTasks()).start(); // Simplified - logic moved to TaskManager
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(frame, "Error starting task processing: " + ex.getMessage()); // Step 13
+                processButton.setEnabled(true); // Step 13: Reset button on failure
+            }
         });
 
         revertButton.addActionListener(e -> {
-            manager.revertTasks();
-            updateTaskDisplay((String) filterCategoryCombo.getSelectedItem());
+            try { // Step 13: Wrap revert
+                manager.revertTasks();
+                updateTaskDisplay((String) filterCategoryCombo.getSelectedItem());
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(frame, "Error reverting tasks: " + ex.getMessage()); // Step 13
+            }
         });
 
         exportButton.addActionListener(e -> {
@@ -218,53 +246,65 @@ public class Main {
         deleteButton.addActionListener(e -> {
             Task selectedTask = taskList.getSelectedValue();
             if(selectedTask != null){
-                boolean deleted = manager.deleteTask(selectedTask.id());
-                if(deleted){
-                    updateTaskDisplay((String) filterCategoryCombo.getSelectedItem());
-                    updateDependencyList(dependencyList);
-                    JOptionPane.showMessageDialog(frame, "Task deleted: " + selectedTask.title() + " with id " + selectedTask.id());
-                }else{
-                    JOptionPane.showMessageDialog(frame, "Cannot delete " + selectedTask.title() + " with id " + selectedTask.id()
-                            + ".\nOther tasks depend on it.");
+                try { // Step 13: Wrap deletion
+                    boolean deleted = manager.deleteTask(selectedTask.id());
+                    if (deleted) {
+                        updateTaskDisplay((String) filterCategoryCombo.getSelectedItem());
+                        updateDependencyList(dependencyList);
+                        JOptionPane.showMessageDialog(frame, "Task deleted: " + selectedTask.title() + " with id " + selectedTask.id());
+                    } else {
+                        JOptionPane.showMessageDialog(frame, "Cannot delete " + selectedTask.title() + " with id " + selectedTask.id()
+                                + ".\nOther tasks depend on it.");
+                    }
+                } catch (Exception ex) {
+                    JOptionPane.showMessageDialog(frame, "Error deleting task: " + ex.getMessage()); // Step 13
                 }
-            }else{
+            } else {
                 JOptionPane.showMessageDialog(frame, "Please select a task to delete.");
             }
         });
 
         editButton.addActionListener(e -> {
             Task selectedTask = taskList.getSelectedValue();
-            if(selectedTask != null){
-                editingTask = selectedTask;
-                titleField.setText(selectedTask.title());
-                dueField.setText(selectedTask.dueDate() != null ? selectedTask.dueDate().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")): "");
-                effortField.setText(selectedTask.effort().toString());
-                priorityCombo.setSelectedItem(selectedTask.priority());
+            if (selectedTask != null) {
+                try { // Step 13: Wrap edit setup
+                    editingTask = selectedTask;
+                    titleField.setText(selectedTask.title());
+                    dueField.setText(selectedTask.dueDate() != null ? selectedTask.dueDate().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")) : "");
+                    effortField.setText(selectedTask.effort().toString());
+                    priorityCombo.setSelectedItem(selectedTask.priority());
 
-                categoryCombo.setSelectedItem(selectedTask.category() != null ? selectedTask.category() : "");
+                    categoryCombo.setSelectedItem(selectedTask.category() != null ? selectedTask.category() : "");
 
-                DefaultListModel<Task> depModel = (DefaultListModel<Task>) dependencyList.getModel();
-                List<Integer> depIndices = new ArrayList<>();
-                for(int i = 0; i < depModel.size(); i++){
-                    if(selectedTask.dependencies().contains(depModel.get(i).id())){
-                        depIndices.add(i);
+                    DefaultListModel<Task> depModel = (DefaultListModel<Task>) dependencyList.getModel();
+                    List<Integer> depIndices = new ArrayList<>();
+                    for (int i = 0; i < depModel.size(); i++) {
+                        if (selectedTask.dependencies().contains(depModel.get(i).id())) {
+                            depIndices.add(i);
+                        }
                     }
-                }
 
-                dependencyList.setSelectedIndices(depIndices.stream().mapToInt(Integer::intValue).toArray());
-                addButton.setText("Save Changes");
-                //Added to ensure button visibility
-                addButton.setVisible(true);
-                addTaskPanel.revalidate();
-                addTaskPanel.repaint();
-            } else{
+                    dependencyList.setSelectedIndices(depIndices.stream().mapToInt(Integer::intValue).toArray());
+                    addButton.setText("Save Changes");
+                    // Added to ensure button visibility
+                    addButton.setVisible(true);
+                    addTaskPanel.revalidate();
+                    addTaskPanel.repaint();
+                } catch (Exception ex) {
+                    JOptionPane.showMessageDialog(frame, "Error setting up task edit: " + ex.getMessage()); // Step 13
+                }
+            } else {
                 JOptionPane.showMessageDialog(frame, "Please select a task to edit.");
             }
         });
 
         filterCategoryCombo.addActionListener(e -> {
-            String selectedCategory = (String) filterCategoryCombo.getSelectedItem();
-            updateTaskDisplay(selectedCategory == null || selectedCategory.equals("All Categories") ? null : selectedCategory);
+            try { // Step 13: Wrap filter update
+                String selectedCategory = (String) filterCategoryCombo.getSelectedItem();
+                updateTaskDisplay(selectedCategory == null || selectedCategory.equals("All Categories") ? null : selectedCategory);
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(frame, "Error filtering tasks: " + ex.getMessage()); // Step 13
+            }
         });
 
         frame.setLayout(new BorderLayout());

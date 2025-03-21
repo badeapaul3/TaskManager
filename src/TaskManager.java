@@ -24,7 +24,14 @@ public class TaskManager {
     }
 
     public void addTask(Task task) {
+        if (task == null || task.title() == null || task.title().trim().isEmpty()) { // Step 13: Input validation
+            JOptionPane.showMessageDialog(null, "Task title cannot be empty"); // Step 13
+            return;
+        }
+
         int newId = db.saveTask(task);
+        if (newId == -1) return; // Step 13: Check save failure
+
         Task taskWithId = new Task(newId, task.title(), task.description(), task.createdAt(),
                 task.dueDate(), task.isCompleted(), task.category(), task.notes(), task.effort(), task.priority(), task.dependencies());
         synchronized (this) {
@@ -130,19 +137,29 @@ public class TaskManager {
     }
 
     public void exportTasksToCsv(String filename) {
-        fileHandler.exportToCsv(tasks, filename);
-        processor.updateGraphAfterRevert(); // Step 12.2: Ensure graph syncs with exported state
+        try { // Step 13: Wrap file operation
+            fileHandler.exportToCsv(tasks, filename);
+            processor.updateGraphAfterRevert();
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(null, "Failed to export tasks: " + e.getMessage()); // Step 13
+        }
     }
 
     public void importTasksFromCsv(String filename) {
-        List<Task> importedTasks = fileHandler.importFromCsv(filename);
-        integrateImportedTasks(importedTasks);
+        try { // Step 13: Wrap file operation
+            List<Task> importedTasks = fileHandler.importFromCsv(filename);
+            integrateImportedTasks(importedTasks);
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(null, "Failed to import tasks: " + e.getMessage()); // Step 13
+        }
     }
 
     private void integrateImportedTasks(List<Task> importedTasks) {
         synchronized (this) {
             for (Task task : importedTasks) {
+                if (task == null) continue; // Step 13: Skip invalid imports
                 int newId = db.saveTask(task);
+                if (newId == -1) continue; // Step 13: Skip failed saves
                 Task taskWithId = new Task(newId, task.title(), task.description(), task.createdAt(),
                         task.dueDate(), task.isCompleted(), task.category(), task.notes(), task.effort(), task.priority(), task.dependencies());
                 tasks.add(taskWithId);

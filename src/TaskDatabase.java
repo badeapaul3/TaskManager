@@ -1,3 +1,4 @@
+import javax.swing.*;
 import java.math.BigDecimal;
 import java.sql.*;
 import java.time.LocalDateTime;
@@ -32,7 +33,8 @@ public class TaskDatabase {
                     "FOREIGN KEY(task_id) REFERENCES tasks(id), " +
                     "FOREIGN KEY(dependency_id) REFERENCES tasks(id))");
         } catch (SQLException e) {
-            System.err.println("Database initialization error: " + e.getMessage());
+            JOptionPane.showMessageDialog(null, "Failed to initialize database: " + e.getMessage());
+            throw new RuntimeException("Database initialization failed", e);
         }
     }
 
@@ -41,7 +43,8 @@ public class TaskDatabase {
             Map<Integer, List<Integer>> dependencyMap = loadDependencies(conn);
             loadTasks(conn, dependencyMap, tasks);
         } catch (SQLException e) {
-            System.err.println("Database load error: " + e.getMessage());
+            JOptionPane.showMessageDialog(null, "Failed to load tasks from database: " + e.getMessage()); // Step 13
+            tasks.clear(); // Step 13: Reset to safe state
         }
     }
 
@@ -100,7 +103,8 @@ public class TaskDatabase {
                 if (rs.next()) return rs.getInt(1);
             }
         } catch (SQLException e) {
-            System.err.println("Database insert error: " + e.getMessage());
+            JOptionPane.showMessageDialog(null, "Failed to save task: " + e.getMessage()); // Step 13
+            return -1; // Step 13: Indicate failure
         }
         return -1;
     }
@@ -116,7 +120,7 @@ public class TaskDatabase {
             }
             pstmt.executeBatch();
         } catch (SQLException e) {
-            System.err.println("Database dependency insert error: " + e.getMessage());
+            JOptionPane.showMessageDialog(null, "Failed to save dependencies: " + e.getMessage()); // Step 13
         }
     }
 
@@ -131,7 +135,7 @@ public class TaskDatabase {
                 pstmt.executeUpdate();
             }
         } catch (SQLException e) {
-            System.err.println("Database delete error: " + e.getMessage());
+            JOptionPane.showMessageDialog(null, "Failed to delete task: " + e.getMessage()); // Step 13
         }
     }
 
@@ -152,7 +156,7 @@ public class TaskDatabase {
             pstmt.setInt(10, task.id());
             pstmt.executeUpdate();
         } catch (SQLException e) {
-            System.err.println("Database update error: " + e.getMessage());
+            JOptionPane.showMessageDialog(null, "Failed to update task: " + e.getMessage()); // Step 13
         }
     }
 }
